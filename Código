@@ -1,0 +1,68 @@
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('dashboard')
+    .setTitle('Dashboard Ventas')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function verificarPassword(password) {
+  var CONTRASEÑA_CORRECTA = "Ivonne2026";  // ← Cambia esto
+  return password === CONTRASEÑA_CORRECTA;
+}
+
+function obtenerVentas() {
+  var cache = CacheService.getScriptCache();
+  var datosGuardados = cache.get('ventas_diarias');
+  
+  if (datosGuardados != null) {
+    return JSON.parse(datosGuardados);
+  }
+  
+  var projectId = 'ivonne-399623';
+  
+  var query = `
+    SELECT
+      DATE(Fecha_orden) AS Fecha,
+      SUM(Precio_sin_IVA) AS Monto
+    FROM
+      \`ivonne-399623.IVONNE.Vent_Historica\`
+    WHERE
+      Fecha_orden BETWEEN '2026-01-01' AND '2026-01-26'
+    GROUP BY
+      Fecha
+    ORDER BY
+      Fecha
+  `;
+  
+  var request = {
+    query: query,
+    useLegacySql: false
+  };
+  
+  try {
+    var queryResults = BigQuery.Jobs.query(request, projectId);
+    var rows = queryResults.rows;
+    
+    var datos = [];
+    
+    if (rows) {
+      rows.forEach(function(row) {
+        datos.push({
+          fecha: row.f[0].v,
+          monto: parseFloat(row.f[1].v)
+        });
+      });
+    }
+    
+    cache.put('ventas_diarias', JSON.stringify(datos), 86400);
+    
+    return datos;
+    
+  } catch (error) {
+    throw new Error('Error: ' + error.message);
+  }
+}
+
+function limpiarCache() {
+  var cache = CacheService.getScriptCache();
+  cache.remove('ventas_diarias');
+}
