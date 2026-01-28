@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    
+    /* PANTALLA DE LOGIN */
+    #loginScreen {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .login-box {
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    
+    .lock-icon {
+      font-size: 60px;
+      margin-bottom: 20px;
+    }
+    
+    h2 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    
+    input[type="password"] {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #ddd;
+      border-radius: 5px;
+      font-size: 16px;
+      margin-bottom: 15px;
+    }
+    
+    input[type="password"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .error-msg {
+      color: #e74c3c;
+      margin-top: 15px;
+      display: none;
+    }
+    
+    /* PANTALLA DE DASHBOARD */
+    #dashboardScreen {
+      display: none;
+      padding: 20px;
+    }
+    
+    h1 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .chart-container {
+      background: white;
+      padding: 30px;
+      margin: 20px auto;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      max-width: 1200px;
+    }
+    
+    #loading {
+      text-align: center;
+      padding: 50px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  
+  <!-- PANTALLA DE LOGIN -->
+  <div id="loginScreen">
+    <div class="login-box">
+      <div class="lock-icon">🔒</div>
+      <h2>Dashboard Ventas</h2>
+      <p class="subtitle">Acceso restringido</p>
+      
+      <input 
+        type="password" 
+        id="passwordInput" 
+        placeholder="Ingrese la contraseña"
+      >
+      <button onclick="verificarAcceso()">Ingresar</button>
+      
+      <p class="error-msg" id="errorMsg">❌ Contraseña incorrecta</p>
+    </div>
+  </div>
+  
+  <!-- PANTALLA DE DASHBOARD -->
+  <div id="dashboardScreen">
+    <h1>📊 Ventas Diarias - Enero 2026</h1>
+    
+    <div id="loading">Cargando datos desde BigQuery...</div>
+    
+    <div class="chart-container" style="display:none;">
+      <canvas id="graficoVentas"></canvas>
+    </div>
+  </div>
+  
+  <script>
+    // Al cargar, enfocar el campo de contraseña
+    document.getElementById('passwordInput').focus();
+    
+    // Permitir Enter para enviar
+    document.getElementById('passwordInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        verificarAcceso();
+      }
+    });
+    
+    function verificarAcceso() {
+      var password = document.getElementById('passwordInput').value;
+      
+      google.script.run
+        .withSuccessHandler(function(esValida) {
+          if (esValida) {
+            // Contraseña correcta - mostrar dashboard
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('dashboardScreen').style.display = 'block';
+            cargarDatos();
+          } else {
+            // Contraseña incorrecta
+            document.getElementById('errorMsg').style.display = 'block';
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('passwordInput').focus();
+          }
+        })
+        .verificarPassword(password);
+    }
+    
+    function cargarDatos() {
+      google.script.run
+        .withSuccessHandler(crearGrafico)
+        .withFailureHandler(mostrarError)
+        .obtenerVentas();
+    }
+    
+    function crearGrafico(datos) {
+      document.getElementById('loading').style.display = 'none';
+      document.querySelector('.chart-container').style.display = 'block';
+      
+      var fechas = datos.map(d => d.fecha);
+      var montos = datos.map(d => d.monto);
+      
+      var ctx = document.getElementById('graficoVentas').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: fechas,
+          datasets: [{
+            label: 'Ventas (sin IVA)',
+            data: montos,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Ventas por Día',
+              font: { size: 18 }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '$' + value.toLocaleString();
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    function mostrarError(error) {
+      document.getElementById('loading').innerHTML = 
+        '<div style="color:red;">❌ Error: ' + error.message + '</div>';
+    }
+  </script>
+  
+</body>
+</html>
